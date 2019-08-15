@@ -11,7 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
+	"log"
+	"syscall"
+	"os/signal"
+	"path/filepath"
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/tun/wintun"
 
@@ -34,13 +37,25 @@ var flags = [...]string{
 	"/wintun /deleteall",
 }
 
+var cli = "";
+var is_cli = false;
+
 func fatal(v ...interface{}) {
-	windows.MessageBox(0, windows.StringToUTF16Ptr(fmt.Sprint(v...)), windows.StringToUTF16Ptr("Error"), windows.MB_ICONERROR)
+	if(is_cli){
+		fmt.Println(fmt.Sprint(v...))
+	} else {
+		windows.MessageBox(0, windows.StringToUTF16Ptr(fmt.Sprint(v...)), windows.StringToUTF16Ptr("Error"), windows.MB_ICONERROR)
+	}
+	
 	os.Exit(1)
 }
 
 func info(title string, format string, v ...interface{}) {
-	windows.MessageBox(0, windows.StringToUTF16Ptr(fmt.Sprintf(format, v...)), windows.StringToUTF16Ptr(title), windows.MB_ICONINFORMATION)
+	if(is_cli) {
+		fmt.Println(fmt.Sprintf(format, v...))
+	} else {
+		windows.MessageBox(0, windows.StringToUTF16Ptr(fmt.Sprintf(format, v...)), windows.StringToUTF16Ptr(title), windows.MB_ICONINFORMATION)
+	}
 }
 
 func usage() {
@@ -101,6 +116,7 @@ func pipeFromHandleArgument(handleStr string) (*os.File, error) {
 }
 
 func main() {
+	is_cli = cli == "true"
 	checkForWow64()
 
 	if len(os.Args) <= 1 {
@@ -212,6 +228,31 @@ func main() {
 		if err != nil {
 			fatal(err)
 		}
+		return
+	
+	case "/runtunnelservice":
+		if len(os.Args) != 3 {
+			usage()
+		}
+		log.SetOutput(os.Stdout)
+		fmt.Println("[CLI] Starting tunnel.")
+		err := manager.InstallTunnel(os.Args[2])
+		if err != nil {
+			fatal(err)
+		}
+		fmt.Println("[CLI] WG tunnel established.")
+		sigs := make(chan os.Signal, 1)
+		done := make(chan bool, 1)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			sig := <-sigs
+			fmt.Println(fmt.Sprintf("[CLI] Received a signal of type %s, ending tunnel.",sig))
+			manager.UninstallTunnel(strings.ReplaceAll(filepath.Base(os.Args[2]),".conf",""))
+			done <- true
+		}()
+		<-done
+		manager.UninstallTunnel(strings.ReplaceAll(filepath.Base(os.Args[2]),".conf",""))
+		fmt.Println("[CLI] Tunnel ended.")
 		return
 	case "/wintun":
 		if len(os.Args) < 3 {

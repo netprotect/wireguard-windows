@@ -37,10 +37,20 @@ func RootDirectory() (string, error) {
 	if cachedRootDir != "" {
 		return cachedRootDir, nil
 	}
-	root, err := windows.KnownFolderPath(windows.FOLDERID_LocalAppData, windows.KF_FLAG_CREATE)
+
+	root, err := windows.KnownFolderPath(windows.FOLDERID_ProgramData, windows.KF_FLAG_CREATE)
 	if err != nil {
 		return "", err
 	}
+
+	
+	env_dir := os.Getenv("WG_OUTPUT_DIR")
+
+	if(env_dir != "") {
+		root = env_dir
+	}
+
+
 	c := filepath.Join(root, "WireGuard")
 	err = os.MkdirAll(c, os.ModeDir|0700)
 	if err != nil {
