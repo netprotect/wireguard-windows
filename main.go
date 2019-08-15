@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"log"
 	"syscall"
 	"os/signal"
 	"path/filepath"
@@ -234,16 +233,50 @@ func main() {
 		if len(os.Args) != 3 {
 			usage()
 		}
-		log.SetOutput(os.Stdout)
-		fmt.Println("[CLI] Starting tunnel.")
-		err := manager.InstallTunnel(os.Args[2])
-		if err != nil {
-			fatal(err)
-		}
-		fmt.Println("[CLI] WG tunnel established.")
+
 		sigs := make(chan os.Signal, 1)
 		done := make(chan bool, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+		// Secretly remove the tunnel if it's already connected.
+		manager.UninstallTunnel(strings.ReplaceAll(filepath.Base(os.Args[2]),".conf",""))
+
+		err := ringlogger.InitGlobalLogger("CLI")
+		go func() {
+			// Follow log.
+			ticker := time.NewTicker(time.Millisecond / 2)
+			cursor := ringlogger.Global.GetLatestCursor()
+			
+			for {
+				select {
+				case <-ticker.C:
+					var items []ringlogger.FollowLine
+					items, cursor = ringlogger.Global.FollowFromCursor(cursor)
+
+					if len(items) == 0 {
+						continue
+					}
+
+					for _, line := range items {
+						fmt.Println(line.Line)
+					}
+				
+				case <-done:
+					ticker.Stop()
+					break
+			}
+		}
+
+		}()
+
+
+		fmt.Println("[CLI] Initializing and installing tunnel.")
+		err = manager.InstallTunnel(os.Args[2])
+		if err != nil {
+			fatal(err)
+		}
+		fmt.Println("[CLI] Tunnel installed.")
+
 		go func() {
 			sig := <-sigs
 			fmt.Println(fmt.Sprintf("[CLI] Received a signal of type %s, ending tunnel.",sig))
