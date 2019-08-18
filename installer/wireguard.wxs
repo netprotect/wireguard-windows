@@ -43,6 +43,8 @@
 		<Property Id="ARPNOMODIFY" Value="yes" />
 		<Property Id="DISABLEADVTSHORTCUTS" Value="yes" />
 		<Property Id="DISABLEROLLBACK" Value="yes" />
+		<Property Id="MSIDISABLERMRESTART" Value="1" />
+		<Property Id="MSIRMSHUTDOWN" Value="1" />
 
 		<!--
 			Upgrading
@@ -52,28 +54,13 @@
 			AllowSameVersionUpgrades="yes"
 			DowngradeErrorMessage="A newer version of [ProductName] is already installed."
 			Schedule="afterInstallExecute" />
-		<Property Id="INSTALLFOLDERPREV">
-			<ComponentSearch Id="WireGuardExecutable" Guid="c3508d23-3362-47ce-9220-321bdb1a1acc" />
-		</Property>
-		<SetProperty
-			After="AppSearch"
-			Action="SetInstallFolderPrev"
-			Id="INSTALLFOLDER"
-			Value="[INSTALLFOLDERPREV]"
-			Sequence="first"><![CDATA[INSTALLFOLDERPREV AND NOT Installed]]></SetProperty>
-		<SetProperty
-			After="SetInstallFolderPrev"
-			Action="SetInstallFolderParam"
-			Id="INSTALLFOLDER"
-			Value="[INSTALLDIR]"
-			Sequence="first"><![CDATA[INSTALLDIR AND NOT Installed]]></SetProperty>
 
 		<!--
 			Folders
 		-->
 		<Directory Id="TARGETDIR" Name="SourceDir">
 			<Directory Id="$(var.PlatformProgramFilesFolder)">
-				<Directory Id="INSTALLFOLDER" Name="WireGuard" />
+				<Directory Id="WireGuardFolder" Name="WireGuard" />
 			</Directory>
 			<Directory Id="ProgramMenuFolder" />
 			<Directory Id="SystemFolder" />
@@ -86,9 +73,9 @@
 			Components
 		-->
 		<ComponentGroup Id="WireGuardComponents">
-			<Component Directory="INSTALLFOLDER" Id="WireGuardExecutable" Guid="c3508d23-3362-47ce-9220-321bdb1a1acc">
+			<Component Directory="WireGuardFolder" Id="WireGuardExecutable" Guid="c3508d23-3362-47ce-9220-321bdb1a1acc">
 				<File Source="..\$(var.WIREGUARD_PLATFORM)\wireguard.exe" KeyPath="yes">
-					<Shortcut Id="WireGuardStartMenuShortcut" Directory="ProgramMenuFolder" Name="WireGuard" Description="WireGuard: Fast, Modern, Secure VPN Tunnel" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
+					<Shortcut Id="WireGuardStartMenuShortcut" Directory="ProgramMenuFolder" Name="WireGuard" Description="WireGuard: Fast, Modern, Secure VPN Tunnel" WorkingDirectory="WireGuardFolder" Advertise="yes" />
 				</File>
 				<ServiceControl Id="DummyService.3AA0C492_29F4_4342_B608_DB95B2DECB13" Name="DummyService.3AA0C492_29F4_4342_B608_DB95B2DECB13" /><!-- A dummy to make WiX create ServiceControl table for us. -->
 			</Component>
@@ -105,14 +92,14 @@
 		<!--
 			Merge modules
 		-->
-		<DirectoryRef Id="INSTALLFOLDER">
+		<DirectoryRef Id="WireGuardFolder">
 			<Merge Id="WintunMergeModule" Language="0" DiskId="1" SourceFile=".deps\wintun-$(var.WIREGUARD_PLATFORM).msm" />
 		</DirectoryRef>
 
 		<!--
 			Features
 		-->
-		<Feature Id="WireGuardFeature" Title="WireGuard" Level="1" ConfigurableDirectory="INSTALLFOLDER">
+		<Feature Id="WireGuardFeature" Title="WireGuard" Level="1">
 			<ComponentGroupRef Id="WireGuardComponents" />
 		</Feature>
 		<Feature Id="WintunFeature" Title="Wintun" Level="1">
@@ -136,11 +123,19 @@
 		</InstallExecuteSequence>
 
 		<!--
+			Kill lingering processes
+		-->
+		<CustomAction Id="KillWireGuardProcesses" BinaryKey="customactions.dll" DllEntry="KillWireGuardProcesses" Execute="deferred" Impersonate="no" />
+		<InstallExecuteSequence>
+			<Custom Action="KillWireGuardProcesses" After="StopServices" />
+		</InstallExecuteSequence>
+
+		<!--
 			Launch wireguard.exe after setup complete
 		-->
 		<CustomAction Id="LaunchApplication" HideTarget="yes" Impersonate="no" Execute="deferred" FileKey="wireguard.exe" ExeCommand="" Return="asyncNoWait" />
 		<InstallExecuteSequence>
-			<Custom Action="LaunchApplication" Before="InstallFinalize">NOT Installed AND NOT DO_NOT_LAUNCH</Custom>
+			<Custom Action="LaunchApplication" Before="InstallFinalize">(&amp;WireGuardFeature = 3) AND NOT DO_NOT_LAUNCH</Custom>
 		</InstallExecuteSequence>
 
 		<!--
@@ -148,7 +143,7 @@
 		-->
 		<CustomAction Id="LaunchApplicationAsOrdinaryUser" HideTarget="yes" FileKey="wireguard.exe" ExeCommand="" Return="asyncNoWait" />
 		<InstallExecuteSequence>
-			<Custom Action="LaunchApplicationAsOrdinaryUser" After="InstallFinalize">Installed AND ProductState=5 AND NOT DO_NOT_LAUNCH</Custom>
+			<Custom Action="LaunchApplicationAsOrdinaryUser" After="InstallFinalize">(&amp;WireGuardFeature = -1) AND (!WireGuardFeature = 3) AND NOT DO_NOT_LAUNCH</Custom>
 		</InstallExecuteSequence>
 	</Product>
 </Wix>
