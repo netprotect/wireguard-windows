@@ -8,7 +8,7 @@ require (
 	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7
 	golang.org/x/sys v0.0.0-20190813064441-fde4db37ae7a
 	golang.org/x/text v0.3.2
-	golang.zx2c4.com/wireguard v0.0.20190806-0.20190822065259-3cedc22d7b49
+	golang.zx2c4.com/wireguard v0.0.20190806-0.20190821071612-68fea631d8e9
 )
 
 replace (
