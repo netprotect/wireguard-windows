@@ -8,12 +8,13 @@ package main
 import (
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
-	"time"
-	"syscall"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
 	"golang.org/x/sys/windows"
 	"golang.zx2c4.com/wireguard/tun/wintun"
 
@@ -36,21 +37,21 @@ var flags = [...]string{
 	"/wintun /deleteall",
 }
 
-var cli = "";
-var is_cli = false;
+var cli = ""
+var isCli = false
 
 func fatal(v ...interface{}) {
-	if(is_cli){
+	if isCli {
 		fmt.Println(fmt.Sprint(v...))
 	} else {
 		windows.MessageBox(0, windows.StringToUTF16Ptr(fmt.Sprint(v...)), windows.StringToUTF16Ptr("Error"), windows.MB_ICONERROR)
 	}
-	
+
 	os.Exit(1)
 }
 
 func info(title string, format string, v ...interface{}) {
-	if(is_cli) {
+	if isCli {
 		fmt.Println(fmt.Sprintf(format, v...))
 	} else {
 		windows.MessageBox(0, windows.StringToUTF16Ptr(fmt.Sprintf(format, v...)), windows.StringToUTF16Ptr(title), windows.MB_ICONINFORMATION)
@@ -115,7 +116,7 @@ func pipeFromHandleArgument(handleStr string) (*os.File, error) {
 }
 
 func main() {
-	is_cli = cli == "true"
+	isCli = cli == "true"
 	checkForWow64()
 
 	if len(os.Args) <= 1 {
@@ -228,7 +229,7 @@ func main() {
 			fatal(err)
 		}
 		return
-	
+
 	case "/runtunnelservice":
 		if len(os.Args) != 3 {
 			usage()
@@ -238,15 +239,24 @@ func main() {
 		done := make(chan bool, 1)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
+		if !filepath.IsAbs(os.Args[2]) {
+			cleanPath, absErr := filepath.Abs(os.Args[2])
+			if absErr != nil {
+				fmt.Println("Converting config path to absolute failed.")
+			}
+			fmt.Println(fmt.Printf("%s is now %s", os.Args[2], cleanPath))
+			os.Args[2] = cleanPath
+		}
+
 		// Secretly remove the tunnel if it's already connected.
-		manager.UninstallTunnel(strings.ReplaceAll(filepath.Base(os.Args[2]),".conf",""))
+		manager.UninstallTunnel(strings.ReplaceAll(filepath.Base(os.Args[2]), ".conf", ""))
 
 		err := ringlogger.InitGlobalLogger("CLI")
 		go func() {
 			// Follow log.
 			ticker := time.NewTicker(time.Millisecond / 2)
 			cursor := ringlogger.Global.GetLatestCursor()
-			
+
 			for {
 				select {
 				case <-ticker.C:
@@ -260,15 +270,14 @@ func main() {
 					for _, line := range items {
 						fmt.Println(line.Line)
 					}
-				
+
 				case <-done:
 					ticker.Stop()
 					break
+				}
 			}
-		}
 
 		}()
-
 
 		fmt.Println("[CLI] Initializing and installing tunnel.")
 		err = manager.InstallTunnel(os.Args[2])
@@ -279,12 +288,12 @@ func main() {
 
 		go func() {
 			sig := <-sigs
-			fmt.Println(fmt.Sprintf("[CLI] Received a signal of type %s, ending tunnel.",sig))
-			manager.UninstallTunnel(strings.ReplaceAll(filepath.Base(os.Args[2]),".conf",""))
+			fmt.Println(fmt.Sprintf("[CLI] Received a signal of type %s, ending tunnel.", sig))
+			manager.UninstallTunnel(strings.ReplaceAll(filepath.Base(os.Args[2]), ".conf", ""))
 			done <- true
 		}()
 		<-done
-		manager.UninstallTunnel(strings.ReplaceAll(filepath.Base(os.Args[2]),".conf",""))
+		manager.UninstallTunnel(strings.ReplaceAll(filepath.Base(os.Args[2]), ".conf", ""))
 		fmt.Println("[CLI] Tunnel ended.")
 		return
 	case "/wintun":
@@ -310,6 +319,16 @@ func main() {
 				rebootString = " A reboot is required."
 			}
 			info("Wintun Cleanup", "Deleted %s%s.%s", interfaceString, errorString, rebootString)
+			return
+		case "/add":
+			interfaceName := "WinTun"
+			if len(os.Args) == 4 {
+				interfaceName = os.Args[4]
+			}
+			_, _, err := wintun.CreateInterface(interfaceName, nil)
+			if err != nil {
+				fatal(err)
+			}
 			return
 		default:
 			usage()
