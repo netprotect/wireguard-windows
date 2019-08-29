@@ -71,3 +71,17 @@ func AdminGroupName() string {
 	}
 	return name
 }
+
+//TODO: REMOVE ME once https://go-review.googlesource.com/c/sys/+/192337 lands
+func OpenCurrentProcessToken() (windows.Token, error) {
+	p, e := windows.GetCurrentProcess()
+	if e != nil {
+		return 0, e
+	}
+	var t windows.Token
+	e = windows.OpenProcessToken(p, windows.TOKEN_QUERY|windows.TOKEN_DUPLICATE, &t)
+	if e != nil {
+		return 0, e
+	}
+	return t, nil
+}

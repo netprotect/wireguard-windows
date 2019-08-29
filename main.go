@@ -74,7 +74,7 @@ func checkForWow64() {
 
 func checkForAdminGroup() {
 	// This is not a security check, but rather a user-confusion one.
-	processToken, err := windows.OpenCurrentProcessToken()
+	processToken, err := elevate.OpenCurrentProcessToken() //TODO: Change to windows.OpenCurrentProcessToken once https://go-review.googlesource.com/c/sys/+/192337 lands
 	if err != nil {
 		fatalf("Unable to open current process token: %v", err)
 	}

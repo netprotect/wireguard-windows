@@ -45,7 +45,7 @@ func ShellExecute(program string, arguments string, directory string, show int32
 		}
 	}()
 
-	processToken, err := windows.OpenCurrentProcessToken()
+	processToken, err := OpenCurrentProcessToken() //TODO: Change to windows.OpenCurrentProcessToken once https://go-review.googlesource.com/c/sys/+/192337 lands
 	if err != nil {
 		return
 	}
