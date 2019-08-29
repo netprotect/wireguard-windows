@@ -83,7 +83,8 @@ func runAboutDialog(owner walk.Form) error {
 		return err
 	}
 	detailsLbl.SetTextAlignment(walk.AlignHCenterVNear)
-	detailsLbl.SetText(fmt.Sprintf("App version: %s\nGo backend version: %s\nGo version: %s\nOperating system: %s\nArchitecture: %s", version.RunningVersion(), device.WireGuardGoVersion, strings.TrimPrefix(runtime.Version(), "go"), version.OsName(), runtime.GOARCH))
+	_, appVersion := version.RunningNameVersion()
+	detailsLbl.SetText(fmt.Sprintf("App version: %s\nGo backend version: %s\nGo version: %s\nOperating system: %s\nArchitecture: %s", appVersion, device.WireGuardGoVersion, strings.TrimPrefix(runtime.Version(), "go"), version.OsName(), runtime.GOARCH))
 
 	copyrightLbl, err := walk.NewTextLabel(dlg)
 	if err != nil {
@@ -108,15 +109,13 @@ func runAboutDialog(owner walk.Form) error {
 	}
 	closePB.SetAlignment(walk.AlignHCenterVNear)
 	closePB.SetText("Close")
-	closePB.Clicked().Attach(func() {
-		dlg.Accept()
-	})
+	closePB.Clicked().Attach(dlg.Accept)
 	donatePB, err := walk.NewPushButton(buttonCP)
 	if err != nil {
 		return err
 	}
 	donatePB.SetAlignment(walk.AlignHCenterVNear)
-	donatePB.SetText("♥ Donate!")
+	donatePB.SetText("♥ &Donate!")
 	donatePB.Clicked().Attach(func() {
 		if easterEggIndex == -1 {
 			easterEggIndex = 0

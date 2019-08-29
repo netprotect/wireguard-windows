@@ -37,44 +37,18 @@ func errnoErr(e syscall.Errno) error {
 }
 
 var (
-	modkernel32 = windows.NewLazySystemDLL("kernel32.dll")
-	modntdll    = windows.NewLazySystemDLL("ntdll.dll")
-	modole32    = windows.NewLazySystemDLL("ole32.dll")
+	modntdll  = windows.NewLazySystemDLL("ntdll.dll")
+	modole32  = windows.NewLazySystemDLL("ole32.dll")
+	moduser32 = windows.NewLazySystemDLL("user32.dll")
 
-	procGetModuleHandleW     = modkernel32.NewProc("GetModuleHandleW")
-	procGetWindowsDirectoryW = modkernel32.NewProc("GetWindowsDirectoryW")
-	procRtlInitUnicodeString = modntdll.NewProc("RtlInitUnicodeString")
-	procRtlGetCurrentPeb     = modntdll.NewProc("RtlGetCurrentPeb")
-	procCoInitializeEx       = modole32.NewProc("CoInitializeEx")
-	procCoUninitialize       = modole32.NewProc("CoUninitialize")
-	procCoGetObject          = modole32.NewProc("CoGetObject")
+	procRtlInitUnicodeString     = modntdll.NewProc("RtlInitUnicodeString")
+	procRtlGetCurrentPeb         = modntdll.NewProc("RtlGetCurrentPeb")
+	procCoInitializeEx           = modole32.NewProc("CoInitializeEx")
+	procCoUninitialize           = modole32.NewProc("CoUninitialize")
+	procCoGetObject              = modole32.NewProc("CoGetObject")
+	procGetWindowThreadProcessId = moduser32.NewProc("GetWindowThreadProcessId")
+	procGetShellWindow           = moduser32.NewProc("GetShellWindow")
 )
-
-func getModuleHandle(moduleName *uint16) (moduleHandle uintptr, err error) {
-	r0, _, e1 := syscall.Syscall(procGetModuleHandleW.Addr(), 1, uintptr(unsafe.Pointer(moduleName)), 0, 0)
-	moduleHandle = uintptr(r0)
-	if moduleHandle == 0 {
-		if e1 != 0 {
-			err = errnoErr(e1)
-		} else {
-			err = syscall.EINVAL
-		}
-	}
-	return
-}
-
-func getWindowsDirectory(windowsDirectory *uint16, inLen uint32) (outLen uint32, err error) {
-	r0, _, e1 := syscall.Syscall(procGetWindowsDirectoryW.Addr(), 2, uintptr(unsafe.Pointer(windowsDirectory)), uintptr(inLen), 0)
-	outLen = uint32(r0)
-	if outLen == 0 {
-		if e1 != 0 {
-			err = errnoErr(e1)
-		} else {
-			err = syscall.EINVAL
-		}
-	}
-	return
-}
 
 func rtlInitUnicodeString(destinationString *cUNICODE_STRING, sourceString *uint16) {
 	syscall.Syscall(procRtlInitUnicodeString.Addr(), 2, uintptr(unsafe.Pointer(destinationString)), uintptr(unsafe.Pointer(sourceString)), 0)
@@ -105,5 +79,24 @@ func coGetObject(name *uint16, bindOpts *cBIND_OPTS3, guid *windows.GUID, functi
 	if r0 != 0 {
 		ret = syscall.Errno(r0)
 	}
+	return
+}
+
+func getWindowThreadProcessId(hwnd uintptr, pid *uint32) (tid uint32, err error) {
+	r0, _, e1 := syscall.Syscall(procGetWindowThreadProcessId.Addr(), 2, uintptr(hwnd), uintptr(unsafe.Pointer(pid)), 0)
+	tid = uint32(r0)
+	if tid == 0 {
+		if e1 != 0 {
+			err = errnoErr(e1)
+		} else {
+			err = syscall.EINVAL
+		}
+	}
+	return
+}
+
+func getShellWindow() (hwnd uintptr) {
+	r0, _, _ := syscall.Syscall(procGetShellWindow.Addr(), 0, 0, 0, 0)
+	hwnd = uintptr(r0)
 	return
 }

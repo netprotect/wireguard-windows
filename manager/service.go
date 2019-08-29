@@ -104,7 +104,7 @@ func (service *managerService) Execute(args []string, r <-chan svc.ChangeRequest
 		if err != nil {
 			return
 		}
-		if !elevate.TokenIsMemberOfBuiltInAdministrator(userToken) {
+		if !elevate.TokenIsElevatedOrElevatable(userToken) {
 			userToken.Close()
 			return
 		}
@@ -182,7 +182,7 @@ func (service *managerService) Execute(args []string, r <-chan svc.ChangeRequest
 				return
 			}
 
-			log.Printf("Starting UI process for user '%s@%s' for session %d", username, domain, session)
+			log.Printf("Starting UI process for user ‘%s@%s’ for session %d", username, domain, session)
 			attr := &os.ProcAttr{
 				Sys: &syscall.SysProcAttr{
 					Token: syscall.Token(elevatedToken),
@@ -247,6 +247,7 @@ func (service *managerService) Execute(args []string, r <-chan svc.ChangeRequest
 		}()
 	}
 
+	go cleanupStaleAdapters()
 	go checkForUpdates()
 
 	var sessionsPointer *windows.WTS_SESSION_INFO
@@ -340,4 +341,8 @@ loop:
 		}
 	}
 	return
+}
+
+func Run() error {
+	return svc.Run("WireGuardManager", &managerService{})
 }
