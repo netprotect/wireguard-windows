@@ -22,6 +22,7 @@ import (
 	"golang.zx2c4.com/wireguard/ipc/winpipe"
 
 	"golang.zx2c4.com/wireguard/windows/conf"
+	"golang.zx2c4.com/wireguard/windows/services"
 	"golang.zx2c4.com/wireguard/windows/updater"
 )
 
@@ -49,7 +50,7 @@ func (s *ManagerService) RuntimeConfig(tunnelName string, config *conf.Config) e
 	if err != nil {
 		return err
 	}
-	pipePath, err := PipePathOfTunnel(storedConfig.Name)
+	pipePath, err := services.PipePathOfTunnel(storedConfig.Name)
 	if err != nil {
 		return err
 	}
@@ -106,6 +107,7 @@ func (s *ManagerService) Start(tunnelName string, unused *uintptr) error {
 			}
 		}
 	}()
+	go cleanupStaleAdapters()
 
 	// After that process is started -- it's somewhat asynchronous -- we install the new one.
 	c, err := conf.LoadFromName(tunnelName)
@@ -120,6 +122,8 @@ func (s *ManagerService) Start(tunnelName string, unused *uintptr) error {
 }
 
 func (s *ManagerService) Stop(tunnelName string, _ *uintptr) error {
+	go cleanupStaleAdapters()
+
 	err := UninstallTunnel(tunnelName)
 	if err == windows.ERROR_SERVICE_DOES_NOT_EXIST {
 		_, notExistsError := conf.LoadFromName(tunnelName)
@@ -131,7 +135,7 @@ func (s *ManagerService) Stop(tunnelName string, _ *uintptr) error {
 }
 
 func (s *ManagerService) WaitForStop(tunnelName string, _ *uintptr) error {
-	serviceName, err := ServiceNameOfTunnel(tunnelName)
+	serviceName, err := services.ServiceNameOfTunnel(tunnelName)
 	if err != nil {
 		return err
 	}
@@ -159,7 +163,7 @@ func (s *ManagerService) Delete(tunnelName string, _ *uintptr) error {
 }
 
 func (s *ManagerService) State(tunnelName string, state *TunnelState) error {
-	serviceName, err := ServiceNameOfTunnel(tunnelName)
+	serviceName, err := services.ServiceNameOfTunnel(tunnelName)
 	if err != nil {
 		return err
 	}

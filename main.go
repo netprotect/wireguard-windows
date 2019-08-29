@@ -16,11 +16,11 @@ import (
 	"time"
 
 	"golang.org/x/sys/windows"
-	"golang.zx2c4.com/wireguard/tun/wintun"
 
 	"golang.zx2c4.com/wireguard/windows/elevate"
 	"golang.zx2c4.com/wireguard/windows/manager"
 	"golang.zx2c4.com/wireguard/windows/ringlogger"
+	"golang.zx2c4.com/wireguard/windows/tunnel"
 	"golang.zx2c4.com/wireguard/windows/ui"
 )
 
@@ -34,7 +34,6 @@ var flags = [...]string{
 	"/tunnelservice CONFIG_PATH",
 	"/ui CMD_READ_HANDLE CMD_WRITE_HANDLE CMD_EVENT_HANDLE LOG_MAPPING_HANDLE",
 	"/dumplog OUTPUT_PATH",
-	"/wintun /deleteall",
 }
 
 var cli = ""
@@ -48,6 +47,10 @@ func fatal(v ...interface{}) {
 	}
 
 	os.Exit(1)
+}
+
+func fatalf(format string, v ...interface{}) {
+	fatal(fmt.Sprintf(format, v...))
 }
 
 func info(title string, format string, v ...interface{}) {
@@ -75,7 +78,7 @@ func checkForWow64() {
 	}
 	err = windows.IsWow64Process(p, &b)
 	if err != nil {
-		fatal("Unable to determine whether the process is running under WOW64: ", err)
+		fatalf("Unable to determine whether the process is running under WOW64: %v", err)
 	}
 	if b {
 		fatal("You must use the 64-bit version of WireGuard on this computer.")
@@ -84,13 +87,20 @@ func checkForWow64() {
 
 func checkForAdminGroup() {
 	// This is not a security check, but rather a user-confusion one.
-	processToken, err := windows.OpenCurrentProcessToken()
+	processToken, err := elevate.OpenCurrentProcessToken() //TODO: Change to windows.OpenCurrentProcessToken once https://go-review.googlesource.com/c/sys/+/192337 lands
 	if err != nil {
-		fatal("Unable to open current process token: ", err)
+		fatalf("Unable to open current process token: %v", err)
 	}
 	defer processToken.Close()
-	if !elevate.TokenIsMemberOfBuiltInAdministrator(processToken) {
-		fatal("WireGuard may only be used by users who are a member of the Builtin Administrators group.")
+	if !elevate.TokenIsElevatedOrElevatable(processToken) {
+		fatalf("WireGuard may only be used by users who are a member of the Builtin %s group.", elevate.AdminGroupName())
+	}
+}
+
+func checkForAdminDesktop() {
+	adminDesktop, err := elevate.IsAdminDesktop()
+	if !adminDesktop && err == nil {
+		fatalf("WireGuard is running, but the UI is only accessible from desktops of the Builtin %s group.", elevate.AdminGroupName())
 	}
 }
 
@@ -138,8 +148,12 @@ func main() {
 		go ui.WaitForRaiseUIThenQuit()
 		err := manager.InstallManager()
 		if err != nil {
+			if err == manager.ErrManagerAlreadyRunning {
+				checkForAdminDesktop()
+			}
 			fatal(err)
 		}
+		checkForAdminDesktop()
 		time.Sleep(30 * time.Second)
 		fatal("WireGuard system tray icon did not appear after 30 seconds.")
 		return
@@ -156,7 +170,7 @@ func main() {
 		if len(os.Args) != 2 {
 			usage()
 		}
-		err := manager.RunManager()
+		err := manager.Run()
 		if err != nil {
 			fatal(err)
 		}
@@ -183,7 +197,7 @@ func main() {
 		if len(os.Args) != 3 {
 			usage()
 		}
-		err := manager.RunTunnel(os.Args[2])
+		err := tunnel.Run(os.Args[2])
 		if err != nil {
 			fatal(err)
 		}
@@ -229,7 +243,6 @@ func main() {
 			fatal(err)
 		}
 		return
-
 	case "/runtunnelservice":
 		if len(os.Args) != 3 {
 			usage()
@@ -296,43 +309,6 @@ func main() {
 		manager.UninstallTunnel(strings.ReplaceAll(filepath.Base(os.Args[2]), ".conf", ""))
 		fmt.Println("[CLI] Tunnel ended.")
 		return
-	case "/wintun":
-		if len(os.Args) < 3 {
-			usage()
-		}
-		switch os.Args[2] {
-		case "/deleteall":
-			if len(os.Args) != 3 {
-				usage()
-			}
-			deleted, rebootRequired, errors := wintun.DeleteAllInterfaces()
-			interfaceString := "no interfaces"
-			if len(deleted) > 0 {
-				interfaceString = fmt.Sprintf("interfaces %v", deleted)
-			}
-			errorString := ""
-			if len(errors) > 0 {
-				errorString = fmt.Sprintf(", encountering errors %v", errors)
-			}
-			rebootString := ""
-			if rebootRequired {
-				rebootString = " A reboot is required."
-			}
-			info("Wintun Cleanup", "Deleted %s%s.%s", interfaceString, errorString, rebootString)
-			return
-		case "/add":
-			interfaceName := "WinTun"
-			if len(os.Args) == 4 {
-				interfaceName = os.Args[4]
-			}
-			_, _, err := wintun.CreateInterface(interfaceName, nil)
-			if err != nil {
-				fatal(err)
-			}
-			return
-		default:
-			usage()
-		}
 	}
 	usage()
 }

@@ -6,23 +6,82 @@
 package elevate
 
 import (
-	"runtime"
-
 	"golang.org/x/sys/windows"
 )
 
-func TokenIsMemberOfBuiltInAdministrator(token windows.Token) bool {
-	gs, err := token.GetTokenGroups()
+func isAdmin(token windows.Token) bool {
+	builtinAdminsGroup, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
 	if err != nil {
 		return false
 	}
-	isAdmin := false
-	for _, g := range gs.AllGroups() {
-		if (g.Attributes&windows.SE_GROUP_USE_FOR_DENY_ONLY != 0 || g.Attributes&windows.SE_GROUP_ENABLED != 0) && g.Sid.IsWellKnown(windows.WinBuiltinAdministratorsSid) {
-			isAdmin = true
-			break
-		}
+	var checkableToken windows.Token
+	err = windows.DuplicateTokenEx(token, windows.TOKEN_QUERY|windows.TOKEN_IMPERSONATE, nil, windows.SecurityIdentification, windows.TokenImpersonation, &checkableToken)
+	if err != nil {
+		return false
 	}
-	runtime.KeepAlive(gs)
-	return isAdmin
+	defer checkableToken.Close()
+	isAdmin, err := checkableToken.IsMember(builtinAdminsGroup)
+	return isAdmin && err == nil
+}
+
+func TokenIsElevatedOrElevatable(token windows.Token) bool {
+	if token.IsElevated() && isAdmin(token) {
+		return true
+	}
+	linked, err := token.GetLinkedToken()
+	if err != nil {
+		return false
+	}
+	defer linked.Close()
+	return linked.IsElevated() && isAdmin(linked)
+}
+
+func IsAdminDesktop() (bool, error) {
+	hwnd := getShellWindow()
+	if hwnd == 0 {
+		return false, windows.ERROR_INVALID_WINDOW_HANDLE
+	}
+	var pid uint32
+	_, err := getWindowThreadProcessId(hwnd, &pid)
+	if err != nil {
+		return false, err
+	}
+	process, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION, false, pid)
+	if err != nil {
+		return false, err
+	}
+	defer windows.CloseHandle(process)
+	var token windows.Token
+	err = windows.OpenProcessToken(process, windows.TOKEN_QUERY|windows.TOKEN_DUPLICATE, &token)
+	if err != nil {
+		return false, err
+	}
+	defer token.Close()
+	return TokenIsElevatedOrElevatable(token), nil
+}
+
+func AdminGroupName() string {
+	builtinAdminsGroup, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	if err != nil {
+		return "Administrators"
+	}
+	name, _, _, err := builtinAdminsGroup.LookupAccount("")
+	if err != nil {
+		return "Administrators"
+	}
+	return name
+}
+
+//TODO: REMOVE ME once https://go-review.googlesource.com/c/sys/+/192337 lands
+func OpenCurrentProcessToken() (windows.Token, error) {
+	p, e := windows.GetCurrentProcess()
+	if e != nil {
+		return 0, e
+	}
+	var t windows.Token
+	e = windows.OpenProcessToken(p, windows.TOKEN_QUERY|windows.TOKEN_DUPLICATE, &t)
+	if e != nil {
+		return 0, e
+	}
+	return t, nil
 }
