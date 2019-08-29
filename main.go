@@ -131,7 +131,7 @@ func main() {
 
 	if len(os.Args) <= 1 {
 		checkForAdminGroup()
-		if ui.RaiseUI() {
+		if !isCli && ui.RaiseUI() {
 			return
 		}
 		err := execElevatedManagerServiceInstaller()
