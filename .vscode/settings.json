@@ -1,0 +1,6 @@
+{
+    "go.gopath": "${workspaceFolder}/.deps/gopath",
+    "go.goroot": "${workspaceFolder}/.deps/go",
+    "go.toolsGopath": "${workspaceFolder}/.deps/gopath",
+    "go.toolsEnvVars": {"GOPATH": "${workspaceFolder}/.deps/gopath", "GOROOT": "${workspaceFolder}/.deps/go"}
+}

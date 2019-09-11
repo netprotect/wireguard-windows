@@ -73,8 +73,10 @@ if exist .deps\prepared goto :render
 	mkdir %1 >NUL 2>&1
 	echo [+] Assembling resources %1
 	windres -i resources.rc -o resources.syso -O coff || exit /b %errorlevel%
-	echo [+] Building program %1
+	echo [+] Building GUI program %1
 	go build -ldflags="-H windowsgui -s -w" -tags walk_use_cgo -trimpath -v -o "%~1\wireguard.exe" || exit /b 1
+	echo [+] Building CLI program %1
+	go build -ldflags="-s -w -X main.cli=true" -tags walk_use_cgo -trimpath -v -o "%~1\wireguard-cli.exe" || exit /b 1
 	if not exist "%~1\wg.exe" (
 		echo [+] Building command line tools %1
 		del .deps\src\tools\*.exe .deps\src\tools\*.o .deps\src\tools\wincompat\*.o 2> NUL

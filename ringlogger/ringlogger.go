@@ -21,7 +21,7 @@ import (
 
 const (
 	maxLogLineLength = 512
-	maxLines         = 2048
+	maxLines         = 4096
 	magic            = 0xbadbabe
 )
 
@@ -171,6 +171,14 @@ const CursorAll = ^uint32(0)
 type FollowLine struct {
 	Line  string
 	Stamp time.Time
+}
+
+func (rl *Ringlogger) GetLatestCursor() (nextCursor uint32) {
+	if rl.log == nil {
+		return 0;
+	}
+
+	return rl.log.nextIndex
 }
 
 func (rl *Ringlogger) FollowFromCursor(cursor uint32) (followLines []FollowLine, nextCursor uint32) {

@@ -1,4 +1,6 @@
 GOFLAGS := -ldflags="-H windowsgui -s -w" -v -tags walk_use_cgo -trimpath
+GO_CLI_FLAGS := -ldflags="-s -w -X main.cli=true" -v -tags walk_use_cgo -trimpath
+
 export CGO_ENABLED := 1
 export CGO_CFLAGS := -O3 -Wall -Wno-unused-function -Wno-switch -std=gnu11 -DWINVER=0x0601
 export CGO_LDFLAGS := -Wl,--major-os-version=6 -Wl,--minor-os-version=1 -Wl,--major-subsystem-version=6 -Wl,--minor-subsystem-version=1 -Wl,--tsaware
@@ -18,7 +20,7 @@ endif
 DEPLOYMENT_HOST ?= winvm
 DEPLOYMENT_PATH ?= Desktop
 
-all: amd64/wireguard.exe x86/wireguard.exe
+all: amd64/wireguard.exe x86/wireguard.exe amd64/wireguard-cli.exe x86/wireguard-cli.exe
 
 .deps/prepared: export GOROOT := $(OLD_GOROOT)
 .deps/prepared: $(wildcard golang-*.patch)
@@ -46,6 +48,18 @@ x86/wireguard.exe: export CC := i686-w64-mingw32-gcc
 x86/wireguard.exe: export GOARCH := 386
 x86/wireguard.exe: resources_386.syso $(SOURCE_FILES)
 	go build $(GOFLAGS) -o $@
+
+amd64/wireguard-cli.exe: export CC := x86_64-w64-mingw32-gcc
+amd64/wireguard-cli.exe: export GOARCH := amd64
+amd64/wireguard-cli.exe: resources_amd64.syso $(SOURCE_FILES)
+	$(VERSIONCHECK)
+	go build $(GO_CLI_FLAGS) -o $@
+
+x86/wireguard-cli.exe: export CC := i686-w64-mingw32-gcc
+x86/wireguard-cli.exe: export GOARCH := 386
+x86/wireguard-cli.exe: resources_386.syso $(SOURCE_FILES)
+	$(VERSIONCHECK)
+	go build $(GO_CLI_FLAGS) -o $@
 
 remaster: export CC := x86_64-w64-mingw32-gcc
 remaster: export GOARCH := amd64
